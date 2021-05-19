@@ -7,7 +7,7 @@ me, but has not been used by other people. Please report any issues.**
 
 The turnandrun program was written to provide a manual interface
 to an internet radio player running on a Raspberry Pi. It manages
-a singe dial that is turned to marked positions to select stations to
+a single dial that is turned to marked positions to select stations to
 play, or to stop the audio.
 
 These instructions describe a 10k potentiometer connected to an ADS1115
