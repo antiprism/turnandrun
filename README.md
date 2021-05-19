@@ -1,5 +1,8 @@
 # Turn and Run
 
+**This software should be considered alpha quality. It works fine for
+me, but has not been used by other people. Please report any issues.**
+
 ## A radio station selector dial
 
 The turnandrun program was written to provide a manual interface
@@ -93,7 +96,7 @@ Edit the defaul configuration file and add your settings
 nano /etc/turnandrun.conf
 ```
 
-### configure commands
+### Configure dial commands
 
 Use marks around the dial as positions where you would like commands
 to be executed. These positions correspond to a raw dial dial reading,
@@ -115,13 +118,13 @@ the command to run. En example command line might be
 24000 = stop, mpc stop
 ```
 
-### other settings
+### Configure other settings
 
 These settings only need to be included in the configuration file to
 change the default value. The settings are added one on each line in
 the form `setting=value`.
 
-*channel = letter* (default: a, valid: a, b, c, d):
+**channel = letter** (default: a, valid: a, b, c, d):
 This is the channel on the ADS1X115 board that the potentiometer is
 conected to. Channel 'a' is the first channel, perhaps marked 'A0'
 on the board, and enabled in config.txt with 'cha_enable,cha_gain=1'.
@@ -129,7 +132,7 @@ Channel 'b' is the second channel, perhaps marked 'A1'
 on the board, and enabled in config.txt with 'chb_enable,chb_gain=1'.
 Likewise for channel values 'c' and 'd'.
 
-*turn_before_run = bool* (default: 1, valid: 0, 1):
+**turn_before_run = bool** (default: 1, valid: 0, 1):
 Specifies if the command corresponding to the current dial position
 should be run on startup - '0' run the command, '1' wait for the dial
 to change position before running any command. Don't
@@ -137,15 +140,15 @@ change from the default unless you are happy for any of the commands
 to be run when the machine is started up, for example, when it is plugged
 it in, or when it starts up after a power cut in the night.
 
-*command_delay = seconds* (default: 1, range: 0 - 10):
+**command_delay = seconds** (default: 1, range: 0 - 10):
 Number of seconds for the dial to be at a mark before running the
 command. The delay stops commands from being executed when the dial
 is turned through one mark to get to another.
 
-*frequency = per_second* (default: 10 range: 1 - 100)
+**frequency = per_second** (default: 10 range: 1 - 100)
 Number of times per second to read the dial position.
 
-*dead_zone_width = percent* (default: 5, range: 0 - 50)
+**dead_zone_width = percent** (default: 5, range: 0 - 50)
 Half-way between two adjacent dial marks is a dead zone, which is not
 associated with any mark. The setting is the percentage of the width
 between the two marks that should be used as the dead zone. The dead
