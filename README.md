@@ -93,7 +93,7 @@ file, e.g. for testing, with `turnandrun -c path_to_conf_file`).
 
 Edit the defaul configuration file and add your settings
 ```
-nano /etc/turnandrun.conf
+sudo nano /etc/turnandrun.conf
 ```
 
 ### Configure dial commands
@@ -194,10 +194,10 @@ would be run.
 After installing the service the turnandrun program will run
 when the machine starts. Install the service with
 ```
-turnandrun_service_install
+sudo turnandrun_service_install
 ```
 (and if you later want to uninstall the servicew run
-`turnandrun_service_uninstall`)
+`sudo turnandrun_service_uninstall`)
 
 
 ## Program Help and Options
