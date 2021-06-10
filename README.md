@@ -10,6 +10,8 @@ to an internet radio player running on a Raspberry Pi. It manages
 a single dial that is turned to marked positions to select stations to
 play, or to stop the audio.
 
+[![turnandrun example video](https://img.youtube.com/vi/LjFp83IrOW4/0.jpg)](https://www.youtube.com/watch?v=LjFp83IrOW4)
+
 These instructions describe a 10k potentiometer connected to an ADS1115
 or ADS1015 ADC, and installation on Moode (or Raspberry Pi OS). However,
 it should be possible to adapt them to another input device, or another
