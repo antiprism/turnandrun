@@ -5,7 +5,8 @@ SUBDIRS = src
 EXTRA_DIST = README.md NEWS AUTHORS COPYING wiring_ads1x15.png \
 	bootstrap  \
 	\
-	scripts
+	scripts/turnandrun_launch_test \
+	scripts/turnandrun_service_uninstall
 
 docdir = @docdir@
 doc_DATA = README.md NEWS AUTHORS COPYING

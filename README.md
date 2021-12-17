@@ -36,7 +36,8 @@ use default I2C address 0x48.
 ### Configure the system
 
 Enable the kernel driver for the first channel of the ADS1X15 board.
-Edit the boot configuration file
+Edit the boot configuration file (on Volumio use
+`sudo nano /boot/userconfig.txt`)
 ```
 sudo nano /boot/config.txt
 ```
@@ -64,14 +65,31 @@ sudo reboot
 ```
 
 
-## Install turnandrun program
+## Install turnandrun
 
-The only installation method currenly available is to build and install
-from source.
+Choose one of the two instrallation methods.
+
+### Install binary package (debian-based systems only)
+
+This is the recommended installation method for debian-based systems,
+for example Raspberry Pi OS, Moode and Volumio.
+
+The following commands will download and install the most recent turnandrun
+binary package (may not be completely up to date with the repository)
+```
+wget -N http://pitastic.com/mpd_oled/packages/mpd_oled_moode_install_latest.sh
+sudo bash mpd_oled_moode_install_latest.sh
+```
 
 ### Build and install from Source
 
-Install the packages needed
+This is the installation method for non-debian based systems (for
+example RuneAudio, rAudio-1, and Arch Linux), or for using the
+repository version if the package is no up to date, of simply if
+building from source is preferred.
+
+Install the packages needed, according to your system. On debian-based
+systems the commands are
 ```
 sudo apt update
 sudo apt install build-essential autoconf libtool libiio-dev i2c-tools

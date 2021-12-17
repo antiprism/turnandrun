@@ -40,4 +40,4 @@ m4/lt~obsolete.m4
 *.swp
 
 src/turnandrun
-scripts/mpd_oled_service_install
+scripts/turnandrun_service_install
