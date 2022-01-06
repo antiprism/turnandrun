@@ -7,5 +7,5 @@ turnandrun_SOURCES = \
 	dial.h programopts.h status_msg.h \
 	timer.h ultragetopt.h utils.h
 
-turnandrun_LDFLAGS = -static-libstdc++
+turnandrun_LDFLAGS = -static-libstdc++ -lpthread
 

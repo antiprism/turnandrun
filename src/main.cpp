@@ -24,21 +24,15 @@
 
 #include "dial.h"
 #include "programopts.h"
-#include "timer.h"
 #include "utils.h"
 
-#include <iio.h>
-
-#include <unistd.h>
-
-#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
-#include <map>
 #include <string>
+#include <thread>
 #include <vector>
 
 using std::string;
@@ -48,9 +42,10 @@ public:
   DialSettings dial_settings;
   std::string config_file_name = "/etc/turnandrun.conf"; // config file name
   bool dry_run = false;
-  bool just_raw_values = false;
+  bool report = false;
+  double monitor_freq = 0;
 
-  DialOpts() : ProgramOpts("turnandrun", "0.01") {}
+  DialOpts() : ProgramOpts("turnandrun", "0.02") {}
   void process_command_line(int argc, char **argv);
   void usage();
 };
@@ -66,19 +61,37 @@ positions.
 
 Options
 %s
-  -c <file>  configuration file name (default: /etc/turnandrun.conf), may
-             contain the following lines (with two or more command lines)
+  -c <file>  configuration file name (default: /etc/turnandrun.conf)
+             Format
+               One to four sections, each section starting CHANNEL followed
+               by a letter a, b, c, d (corresponding to the ADS1X15 channel
+               used for the readings)
+                    e.g. CHANNEL a
 
-               dial_reading_number = command_label, command_to_run
+               The section heading is followed by settings lines
+                 turn_before_run = bool       (default: 1, valid: 0, 1)
+                    e.g. turn_before_run = false
+                 command_delay = seconds      (default: 1, range: 0 - 10)
+                    e.g. command_delay = 0.5
+                 frequency = per_second       (default: 10 range: 1 - 100)
+                    e.g. frequency = 20
+                 overlap = percent_band       (default: 5, range: 0 - 50)
+                    e.g. overlap = 1
+                 enable = bool                (default: 1, valid: 0, 1)
+                    e.g. enable = 0
+                 print_commands               (default: 0, valid: 0, 1)
+                    e.g. print_commands = 1
+                 run_commands                 (default: 1, valid: 0, 1)
+                    e.g. run_commands = 0
 
-               channel = letter             (default: a, valid: a, b, c, d)
-               turn_before_run = bool       (default: 1, valid: 0, 1)
-               command_delay = seconds      (default: 1, range: 0 - 10)
-               frequency = per_second       (default: 10 range: 1 - 100)
-               dead_zone = percent_band    (default: 5, range: 0 - 50)
-  -d         dry run, no commands are run, print a report to the screen of
-             the configuration options, the current dial value and mark it
-             corresponds to, and each time a command would be run.
+             and should contain two or more command lines
+                 dial_reading_number = command_label, command_to_run
+                    e.g.  1245 = Play, mpc -q play
+  -r         report, print configuration report on startup
+  -m <freq>  monitor , print current dial readings to screen with frequency
+             freq
+  -d         dry run, no commands are run, -r and -m 10 are set, configuration
+             file errors do not cause the program to exit
 )",
           get_program_name().c_str(), help_ver_text);
 }
@@ -90,7 +103,7 @@ void DialOpts::process_command_line(int argc, char **argv)
 
   handle_long_opts(argc, argv);
 
-  while ((c = getopt(argc, argv, ":hc:d")) != -1) {
+  while ((c = getopt(argc, argv, ":hc:rm:d")) != -1) {
     if (common_opts(c, optopt))
       continue;
 
@@ -101,6 +114,18 @@ void DialOpts::process_command_line(int argc, char **argv)
 
     case 'd':
       dry_run = true;
+      report = true;
+      monitor_freq = 10;
+      break;
+
+    case 'm':
+      print_status_or_exit(read_double(optarg, &monitor_freq), c);
+      if (monitor_freq <= 0)
+        error("monitor frequency must be a positive number", c);
+      break;
+
+    case 'r':
+      report = true;
       break;
 
     default:
@@ -112,239 +137,54 @@ void DialOpts::process_command_line(int argc, char **argv)
     error(msg_str("invalid option or parameter: '%s'", argv[optind]));
 }
 
-int read_line(FILE *file, char **line)
-{
-
-  int linesize = 128;
-  *line = (char *)malloc(linesize);
-  if (!*line)
-    return -1;
-
-  int offset = 0;
-  while (true) {
-    if (!fgets(*line + offset, linesize - offset, file)) {
-      if (offset != 0)
-        return 0;
-      else {
-        *(*line + offset) = '\0'; // terminate the line
-        return (ferror(file)) ? -1 : 1;
-      }
-    }
-    int len = offset + strlen(*line + offset);
-    if ((*line)[len - 1] == '\n') {
-      (*line)[len - 1] = 0;
-      return 0;
-    }
-    offset = len;
-
-    char *newline = (char *)realloc(*line, linesize * 2);
-    if (!newline)
-      return -1;
-    *line = newline;
-    linesize *= 2;
-  }
-}
-
-// Trim whitespace - https://stackoverflow.com/a/17976541
-std::string trim(const std::string &s)
-{
-  auto wsfront = std::find_if_not(s.begin(), s.end(),
-                                  [](int c) { return std::isspace(c); });
-  auto wsback = std::find_if_not(s.rbegin(), s.rend(),
-                                 [](int c) { return std::isspace(c); })
-                    .base();
-  return (wsback <= wsfront ? std::string() : std::string(wsfront, wsback));
-}
-
-Status read_config_file(const string &file_name, DialSettings &dial_settings)
-{
-  dial_settings = DialSettings();
-
-  FILE *file = fopen(file_name.c_str(), "r");
-  if (file == NULL)
-    return Status::error("could not open file");
-
-  // config file has two kinds of lines:
-  //    setting = value
-  //    dial_reading = command_id , command
-
-  char *line;
-  int line_no = 0;
-  int ret;
-  while ((ret = read_line(file, &line)) == 0) {
-    line_no++;
-    auto line_str = trim(line); // to ignore whitespace-only lines
-    free(line);                 // memory freed before any return
-
-    if (!line_str.empty()) {
-      string msg_prefix_line = "line " + std::to_string(line_no) + ": ";
-
-      // split line on first '='
-      auto pos_equal = line_str.find('=');
-      if (pos_equal == string::npos)
-        return Status::error(msg_prefix_line + "did not include '='");
-
-      auto setting = trim(line_str.substr(0, pos_equal));
-
-      // check if setting is setting string or dial reading number
-      int dial_reading;
-      if (read_int(setting.c_str(), &dial_reading)) {
-        // line: dial_reading = command_id , command
-        string msg_prefix_cmd = msg_prefix_line + "dial command: ";
-
-        // split value on first ','
-        auto pos_comma = line_str.find(',', pos_equal + 1);
-        if (pos_comma == string::npos)
-          return Status::error(msg_prefix_cmd + "did not include a ','");
-
-        // label before first ','
-        string cmd_label =
-            trim(line_str.substr(pos_equal + 1, pos_comma - pos_equal - 1));
-
-        // command after first ','
-        string cmd_command = trim(line_str.substr(pos_comma + 1));
-
-        Status stat =
-            dial_settings.set_command(dial_reading, cmd_label, cmd_command);
-        if (!stat)
-          return Status::error(msg_prefix_line + "dial command: " + stat.msg());
-      }
-      else {
-        // line: setting = value
-        auto value = trim(line_str.substr(pos_equal + 1));
-        Status stat = dial_settings.set_setting(setting, value);
-        if (!stat)
-          return Status::error(msg_prefix_line + "setting: " + stat.msg());
-      }
-    }
-  }
-  fclose(file);
-
-  if (dial_settings.get_commands().size() < 2)
-    return Status::error("included less than two commands");
-
-  if (ret < 0)
-    return Status::error("memory allocation error while reading file");
-
-  return Status::ok();
-}
-
-Status loop(iio_device *device, const DialSettings &dial_settings)
-{
-  string attr_v_raw =
-      "in_voltage" + std::to_string(dial_settings.get_channel_num()) + "_raw";
-
-  auto dial_bands =
-      dial_settings.create_dial_bands(dial_settings.get_dead_zone());
-
-  if (dial_settings.get_dry_run()) {
-    printf("\n== Configuration Settings ==\n");
-    printf("%s\n", dial_settings.settings_report().c_str());
-    printf("\n== Band Settings ==\n");
-    printf("%s\n", dial_settings.dial_bands_report(dial_bands).c_str());
-  }
-
-  // dial position mark that was last stopped on
-  long mark_stop = DialBands::unset;
-
-  // dial postion mark for last raw value
-  long mark_last = DialBands::unset;
-
-  // check whether to execute current command on start, or wait for dial change
-  // (by setting a long intial delay on the same band before running command)
-  double initial_delay = (dial_settings.get_turn_before_run())
-                             ? 10000000                           // long time
-                             : dial_settings.get_command_delay(); // usual time
-  Timer timer(initial_delay);
-
-  if (dial_settings.get_dry_run())
-    printf("\n== Processing Loop ==\n");
-
-  bool first_loop = true;
-  while (true) {
-    long long raw;
-    if (iio_device_attr_read_longlong(device, attr_v_raw.c_str(), &raw) != 0) {
-      return Status::error("could not read values from ADS1X15 device from " +
-                           attr_v_raw);
-    }
-
-    auto mark_now = dial_bands.get_mark(raw); // mark for current raw value
-    if (first_loop) {
-      mark_last = mark_now; // initially no change
-      first_loop = false;
-    }
-
-    // If current mark has changed then restart the timer
-    if (mark_now != mark_last)
-      timer.set_timer(dial_settings.get_command_delay());
-
-    // check if the dial...
-    //    has been in the current band for the delay time, AND
-    //    is no longer in the last stop band, AND
-    //    is not in a dead zone
-    if (timer.finished() && mark_now != mark_stop &&
-        mark_now != DialBands::unset) {
-      // dial has stopped in a new band
-      mark_stop = mark_now;
-      auto cmd = dial_settings.get_command(mark_stop);
-      if (dial_settings.get_dry_run())
-        printf("COMMAND (mark: %-10ld) %s: %s\n", mark_stop, cmd.label.c_str(),
-               cmd.command.c_str());
-      else
-        system(cmd.command.c_str());
-    }
-
-    if (dial_settings.get_dry_run()) {
-      string str = msg_str("raw: %-7lld, mark: ", raw);
-      if (mark_now == DialBands::unset)
-        str += "dead zone";
-      else {
-        auto label = dial_settings.get_command(mark_now).label;
-        str += msg_str("%-7ld, label: %s ", mark_now,
-                       label.substr(0, std::min(40u, label.size())).c_str());
-      }
-      printf("%-70s\r", str.c_str());
-      fflush(stdout);
-    }
-
-    mark_last = mark_now;
-
-    usleep(1000000 / dial_settings.get_frequency());
-  }
-
-  return Status::ok();
-}
-
 int main(int argc, char **argv)
 {
   DialOpts opts;
   opts.process_command_line(argc, argv);
 
-  DialSettings dial_settings;
-  Status stat = read_config_file(opts.config_file_name, dial_settings);
-  if (opts.dry_run) {
-    dial_settings.set_dry_run();
-    // print result but don't exit on error
-    printf("\n== Read Configuration File ==\n");
-    printf("File name: '%s': ", opts.config_file_name.c_str());
+  DialSettings default_settings;
+  default_settings.set_run_commands(!opts.dry_run);
+  default_settings.set_print_commands(opts.report);
+
+  Ads1x15 adc;
+  Status stat = adc.read_config_file(opts.config_file_name, default_settings);
+
+  if (opts.report) {
+    printf("\n== Configuration File ==\n");
+    printf("  file name: '%s':\n", opts.config_file_name.c_str());
     if (stat.is_ok())
-      printf("ok");
-    else if (stat.is_warning())
-      printf("warning: %s", stat.c_msg());
-    else
-      printf("error: %s", stat.c_msg());
-    printf("\n");
+      printf("  ok\n");
+    else if (stat.is_warning()) // warn never returned, report all if any added
+      printf("  warning: %s\n", stat.c_msg());
+    else {
+      printf("  error: %s\n", stat.c_msg());
+      printf("  (only first error reported, file may contain more errors)\n");
+    }
+    if (stat.is_error()) {
+      if (opts.dry_run) {
+        printf("\n  Because of configuration file error, using default values\n"
+               "for all channels for dry run\n");
+        default_settings.set_enabled();
+        adc.init(default_settings);
+      }
+      else
+        exit(1);
+    }
+    printf("%s", adc.config_report().c_str());
+    printf("\n== Processing Loop ==\n\n");
   }
-  else
+  else {
     opts.print_status_or_exit(stat,
                               "config file '" + opts.config_file_name + "'");
+  }
 
-  auto iio_context = iio_create_local_context();
-  auto device = iio_context_find_device(iio_context, "ads1015");
-  if (device == nullptr)
-    opts.error("could not open ADS1X15 device");
+  std::thread monitor;
+  if (opts.monitor_freq)
+    monitor = std::thread(&Ads1x15::monitor_loop, &adc, opts.monitor_freq);
 
-  opts.print_status_or_exit(loop(device, dial_settings));
+  // opts.print_status_or_exit(adc.start_loop_dry_run('b'));
+  opts.print_status_or_exit(adc.start_loop());
 
+  monitor.join();
   return 0;
 }

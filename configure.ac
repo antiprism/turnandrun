@@ -1,6 +1,6 @@
 
 AC_PREREQ([2.69])
-AC_INIT([turnandrun], [0.01], [adrian@antiprism.com])
+AC_INIT([turnandrun], [0.02], [adrian@antiprism.com])
 AM_INIT_AUTOMAKE([1.9 foreign])
 LT_INIT
 
@@ -14,7 +14,7 @@ AC_PROG_CC
 
 # Set compiler
 AC_LANG([C++])
-AX_CXX_COMPILE_STDCXX([11], [noext])
+AX_CXX_COMPILE_STDCXX([14], [noext])
 
 inst_msg="Install a development version of this library and rerun ./configure"
 AC_LANG_PUSH([C++])
