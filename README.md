@@ -87,13 +87,13 @@ binary package (may not be completely up to date with the repository)
 
 #### Moode (and systems that can install local deb files with 'apt install')
 ```
-wget -N http://pitastic.com/turnandrun/packages/turnandrun_install_latest.sh
-sudo bash turnandrun_install_latest.sh
+wget -N http://pitastic.com/turnandrun/packages/turnandrun_moode_install_latest.sh
+sudo bash turnandrun_moode_install_latest.sh
 ```
 #### Volumio (and systems that cannot install local deb files with 'apt install')
 ```
-wget -N http://pitastic.com/turnandrun/packages/turnandrun_install_latest.sh
-sudo bash turnandrun_install_latest.sh
+wget -N http://pitastic.com/turnandrun/packages/turnandrun_volumio_install_latest.sh
+sudo bash turnandrun_volumio_install_latest.sh
 ```
 
 ### Build and install from Source
